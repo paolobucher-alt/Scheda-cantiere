@@ -34,7 +34,7 @@ Accessi di prova: `ufficio@demo.it` / `ufficio123` (ufficio), `rossi@demo.it` / 
 
 ## Metterla in uso
 
-**Con Render (consigliato)**: dal pannello di Render scegli *New → Blueprint*, collega questo repository e conferma: il file `render.yaml` crea il servizio a Francoforte con un disco da 1 GB su `/data`. Poi, dalla scheda *Shell* del servizio, crea il primo utente dell'ufficio con `node server/crea-admin.js email "Nome Cognome" password`.
+**Con Render (consigliato)**: dal pannello di Render scegli *New → Blueprint*, collega questo repository e conferma: il file `render.yaml` crea il servizio a Francoforte con un disco da 1 GB su `/data`. Render chiede `ADMIN_EMAIL`, `ADMIN_NOME` e `ADMIN_PASSWORD` (almeno 8 caratteri): al primo avvio, con il database vuoto, l'app crea con questi dati il primo utente dell'ufficio.
 
 **Altrove**:
 
