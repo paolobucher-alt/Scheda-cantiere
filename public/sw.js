@@ -1,6 +1,6 @@
 // Service worker: tiene l'app sul telefono per aprirla anche senza campo.
 // Le chiamate /api non passano da qui (i dati offline li gestisce js/coda.js), tranne le foto, tenute in cache.
-const VERSIONE = 'sc-v1';
+const VERSIONE = 'sc-v2';
 const FILE = ['/', '/index.html', '/style.css', '/manifest.webmanifest', '/icona.svg', '/icona-192.png',
   '/js/app.js', '/js/ui.js', '/js/api.js', '/js/coda.js', '/js/campo.js', '/js/ufficio.js'];
 

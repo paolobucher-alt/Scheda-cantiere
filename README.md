@@ -3,7 +3,7 @@
 App web per gestire costi e ricavi di ogni cantiere: ore lavorate, km dei mezzi, scontrini di trasferta, materiali (previsti, mancanti, avanzi), SAL e diario con foto.
 
 - **Capisquadra**: dal telefono inseriscono ore della squadra, km, scontrini con foto, materiali e note di diario. Funziona anche **senza campo**: i dati restano sul telefono e partono appena torna la connessione. Non vedono tariffe, costi e margini.
-- **Ufficio**: cruscotto di tutti i cantieri, scheda cantiere stampabile in PDF, approvazione degli scontrini sopra il limite, anagrafiche con tariffe storicizzate, utenti, limiti di spesa, esportazione CSV per il commercialista.
+- **Ufficio**: catalogo materiali con prezzi (da cui scegliere nel preventivo: il prezzo viene copiato nel cantiere), cruscotto di tutti i cantieri, scheda cantiere stampabile in PDF, approvazione degli scontrini sopra il limite, anagrafiche con tariffe storicizzate, utenti, limiti di spesa, esportazione CSV per il commercialista.
 
 I calcoli sono gli stessi del foglio Excel di prova (`Scheda_cantiere_v2.xlsx`); i test automatici verificano che i totali dei cantieri di esempio coincidano.
 

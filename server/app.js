@@ -120,12 +120,13 @@ export function creaApp(db, { dataDir, cookieSecure = false } = {}) {
       : db.prepare(`SELECT c.id, c.codice, c.nome, c.cliente, c.indirizzo, c.stato FROM cantieri c JOIN assegnazioni a ON a.cantiere_id = c.id
           WHERE a.utente_id = ? AND c.stato != 'Concluso' ORDER BY c.codice`).all(req.utente.id);
     const ids = cantieri.map((c) => c.id);
-    const materiali = ids.length ? db.prepare(`SELECT id, cantiere_id, materiale, um, q_prevista FROM materiali
+    const materiali = ids.length ? db.prepare(`SELECT id, cantiere_id, materiale, um, q_prevista, catalogo_id FROM materiali
       WHERE cantiere_id IN (${ids.map(() => '?').join(',')}) ORDER BY materiale`).all(...ids) : [];
     return {
       utente: req.utente,
       cantieri,
       operai: db.prepare('SELECT id, nome, ruolo FROM operai WHERE attivo = 1 ORDER BY nome').all(),
+      catalogo: db.prepare('SELECT id, nome, um, categoria FROM catalogo_materiali WHERE attivo = 1 ORDER BY nome').all(),
       mezzi: db.prepare('SELECT id, nome FROM mezzi WHERE attivo = 1 ORDER BY nome').all(),
       materiali,
       tipi_spesa: TIPI_SPESA,
@@ -197,6 +198,16 @@ export function creaApp(db, { dataDir, cookieSecure = false } = {}) {
         const m = db.prepare('SELECT cantiere_id FROM materiali WHERE id = ?').get(mid);
         if (!m) throw err(400, 'Materiale non valido');
         cantiereAccessibile(req, m.cantiere_id);
+      } else if (Number(b.catalogo_id)) {
+        // Materiale non previsto ma presente nel catalogo: prende nome, unità e prezzo dal catalogo
+        if (b.tipo !== 'aggiunta') throw err(400, 'Un avanzo deve riferirsi a un materiale del preventivo');
+        const cid = Number(b.cantiere_id);
+        cantiereAccessibile(req, cid);
+        const cat = db.prepare('SELECT * FROM catalogo_materiali WHERE id = ?').get(Number(b.catalogo_id));
+        if (!cat) throw err(400, 'Materiale del catalogo non valido');
+        mid = db.prepare('SELECT id FROM materiali WHERE cantiere_id = ? AND catalogo_id = ?').get(cid, cat.id)?.id
+          ?? Number(db.prepare('INSERT INTO materiali (cantiere_id, materiale, um, prezzo, q_prevista, catalogo_id) VALUES (?,?,?,?,0,?)')
+            .run(cid, cat.nome, cat.um, cat.prezzo, cat.id).lastInsertRowid);
       } else {
         // Materiale non previsto nel preventivo: lo crea con quantità prevista 0, il prezzo lo mette l'ufficio
         if (b.tipo !== 'aggiunta') throw err(400, 'Un avanzo deve riferirsi a un materiale del preventivo');
@@ -322,7 +333,7 @@ export function creaApp(db, { dataDir, cookieSecure = false } = {}) {
     stato: STATI_CANTIERE.includes(b.stato) ? b.stato : (() => { throw err(400, 'Stato non valido'); })(),
     offerta: num(b.offerta || 0, 'offerta', { min: 0 }),
   });
-  const unico = (fn) => { try { return fn(); } catch (e) { if (/UNIQUE/.test(e.message)) throw err(409, 'Esiste già un elemento con questo codice o email'); throw e; } };
+  const unico = (fn) => { try { return fn(); } catch (e) { if (/UNIQUE/.test(e.message)) throw err(409, 'Esiste già un elemento con questo nome, codice o email'); throw e; } };
   u.post('/cantieri', h((req) => unico(() => {
     const c = campiCantiere(req.body);
     const id = db.prepare('INSERT INTO cantieri (codice, nome, cliente, indirizzo, data_inizio, data_fine, stato, offerta) VALUES (?,?,?,?,?,?,?,?)')
@@ -349,10 +360,23 @@ export function creaApp(db, { dataDir, cookieSecure = false } = {}) {
   const campiMat = (b) => ({ materiale: txt(b.materiale, 'materiale', { max: 200 }), um: txt(b.um, 'U.M.', { opz: true, max: 20 }),
     prezzo: num(b.prezzo, 'prezzo', { min: 0, opz: true }), q_prevista: num(b.q_prevista || 0, 'quantità prevista', { min: 0 }) });
   u.post('/cantieri/:id/materiali', h((req) => {
-    const m = campiMat(req.body);
-    const id = db.prepare('INSERT INTO materiali (cantiere_id, materiale, um, prezzo, q_prevista) VALUES (?,?,?,?,?)')
-      .run(Number(req.params.id), m.materiale, m.um, m.prezzo, m.q_prevista).lastInsertRowid;
-    return { id: Number(id) };
+    const b = { ...req.body };
+    // Dal catalogo: i campi lasciati vuoti si completano con i dati del catalogo (il prezzo viene copiato)
+    const cat = Number(b.catalogo_id) ? db.prepare('SELECT * FROM catalogo_materiali WHERE id = ?').get(Number(b.catalogo_id)) : null;
+    if (Number(b.catalogo_id) && !cat) throw err(400, 'Materiale del catalogo non valido');
+    if (cat) { b.materiale ||= cat.nome; b.um ||= cat.um; if (b.prezzo === undefined || b.prezzo === null || b.prezzo === '') b.prezzo = cat.prezzo; }
+    const m = campiMat(b);
+    return tx(db, () => {
+      let catId = cat?.id ?? null;
+      // "Aggiungi anche al catalogo"
+      if (!catId && b.salva_catalogo) {
+        const esiste = db.prepare('SELECT id FROM catalogo_materiali WHERE nome = ?').get(m.materiale);
+        catId = esiste?.id ?? Number(db.prepare('INSERT INTO catalogo_materiali (nome, um, prezzo) VALUES (?,?,?)').run(m.materiale, m.um, m.prezzo).lastInsertRowid);
+      }
+      const id = db.prepare('INSERT INTO materiali (cantiere_id, materiale, um, prezzo, q_prevista, catalogo_id) VALUES (?,?,?,?,?,?)')
+        .run(Number(req.params.id), m.materiale, m.um, m.prezzo, m.q_prevista, catId).lastInsertRowid;
+      return { id: Number(id) };
+    });
   }));
   u.put('/materiali/:id', h((req) => {
     const m = campiMat(req.body);
@@ -360,6 +384,22 @@ export function creaApp(db, { dataDir, cookieSecure = false } = {}) {
     return { ok: true };
   }));
   u.delete('/materiali/:id', h((req) => { db.prepare('DELETE FROM materiali WHERE id = ?').run(Number(req.params.id)); return { ok: true }; }));
+
+  // Catalogo materiali
+  const campiCat = (b) => ({ nome: txt(b.nome, 'nome', { max: 200 }), um: txt(b.um, 'U.M.', { opz: true, max: 20 }),
+    prezzo: num(b.prezzo, 'prezzo', { min: 0, opz: true }), categoria: txt(b.categoria, 'categoria', { opz: true, max: 60 }) });
+  u.get('/catalogo', h(() => db.prepare(`SELECT c.*, (SELECT COUNT(*) FROM materiali m WHERE m.catalogo_id = c.id) AS usato
+    FROM catalogo_materiali c ORDER BY c.attivo DESC, c.nome`).all()));
+  u.post('/catalogo', h((req) => unico(() => {
+    const c = campiCat(req.body);
+    return { id: Number(db.prepare('INSERT INTO catalogo_materiali (nome, um, prezzo, categoria) VALUES (?,?,?,?)').run(c.nome, c.um, c.prezzo, c.categoria).lastInsertRowid) };
+  })));
+  u.put('/catalogo/:id', h((req) => unico(() => {
+    const c = campiCat(req.body);
+    db.prepare('UPDATE catalogo_materiali SET nome=?, um=?, prezzo=?, categoria=?, attivo=? WHERE id=?')
+      .run(c.nome, c.um, c.prezzo, c.categoria, req.body.attivo === false ? 0 : 1, Number(req.params.id));
+    return { ok: true };
+  })));
 
   // SAL
   u.post('/cantieri/:id/sal', h((req) => {
