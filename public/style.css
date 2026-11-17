@@ -62,7 +62,7 @@ button:disabled { opacity: .5; cursor: default; }
   border-radius: 10px; opacity: 0; pointer-events: none; transition: opacity .2s; max-width: calc(100vw - 2rem); z-index: 100; }
 #avviso.vis { opacity: 1; }
 .login { max-width: 380px; margin: 12vh auto; padding: 1rem; }
-.login .logo { width: 72px; height: 72px; display: block; margin: 0 auto 1rem; }
+.login .logo { width: 100%; max-width: 300px; height: auto; display: block; margin: 0 auto .5rem; }
 .login h1 { text-align: center; }
 /* Ufficio */
 .tabella { width: 100%; border-collapse: collapse; background: var(--carta); font-size: .92rem; }
