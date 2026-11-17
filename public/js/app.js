@@ -34,7 +34,7 @@ suCambio((s) => {
 });
 badge.onclick = () => { invia(); };
 
-const ROTTE_UFFICIO = [['#/u', 'Cruscotto'], ['#/u/spese', 'Spese da approvare'], ['#/u/operai', 'Operai'], ['#/u/mezzi', 'Mezzi'],
+const ROTTE_UFFICIO = [['#/u', 'Cruscotto'], ['#/u/spese', 'Spese da approvare'], ['#/u/operai', 'Operai'], ['#/u/mezzi', 'Mezzi'], ['#/u/catalogo', 'Catalogo materiali'],
   ['#/u/utenti', 'Utenti'], ['#/u/limiti', 'Limiti spesa'], ['#/u/esporta', 'Esporta'], ['#/campo', 'Inserisci dal cantiere']];
 
 async function mostra() {

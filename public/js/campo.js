@@ -174,13 +174,25 @@ export async function paginaMateriale(main, id) {
   const base = await datiBase(); const c = cantiere(base, id); if (!c) return;
   const mats = base.materiali.filter((m) => m.cantiere_id === c.id);
   const tipo = scelte('tipo', ['Mancante acquistato', 'Avanzo da rendere'], 'Mancante acquistato');
-  const sel = h('select', { name: 'materiale_id' }, h('option', { value: '' }, 'Scegli dal preventivo'),
-    mats.map((m) => h('option', { value: m.id }, `${m.materiale}${m.um ? ' (' + m.um + ')' : ''}`)), h('option', { value: 'nuovo' }, '+ Materiale non previsto'));
+  const giaUsati = new Set(mats.map((m) => m.catalogo_id).filter(Boolean));
+  const dalCatalogo = (base.catalogo || []).filter((c) => !giaUsati.has(c.id));
+  const gruppoCat = dalCatalogo.length ? h('optgroup', { label: 'Dal catalogo (non previsti)' },
+    dalCatalogo.map((c) => h('option', { value: 'cat:' + c.id }, `${c.nome}${c.um ? ' (' + c.um + ')' : ''}`))) : null;
+  const opzNuovo = h('option', { value: 'nuovo' }, '+ Materiale non in elenco');
+  const sel = h('select', { name: 'materiale_id' }, h('option', { value: '' }, 'Scegli il materiale'),
+    mats.length ? h('optgroup', { label: 'Preventivo del cantiere' }, mats.map((m) => h('option', { value: m.id }, `${m.materiale}${m.um ? ' (' + m.um + ')' : ''}`))) : null,
+    gruppoCat, opzNuovo);
   const nuovo = h('div', { hidden: true }, campo('Nome materiale', h('input', { name: 'nuovo_materiale', placeholder: 'es. Silicone trasparente' })),
     campo('Unità di misura', h('input', { name: 'um', placeholder: 'es. pz, m, m², sacco' })));
   const umLbl = h('span');
-  sel.onchange = () => { nuovo.hidden = sel.value !== 'nuovo'; const m = mats.find((x) => x.id === Number(sel.value)); umLbl.textContent = m?.um ? ` (${m.um})` : ''; };
-  tipo.querySelector('input').addEventListener('change', (e) => { const av = e.target.value.startsWith('Avanzo'); sel.lastChild.hidden = av; if (av && sel.value === 'nuovo') { sel.value = ''; sel.onchange(); } });
+  const scelto = () => sel.value.startsWith('cat:') ? dalCatalogo.find((c) => c.id === Number(sel.value.slice(4))) : mats.find((x) => x.id === Number(sel.value));
+  sel.onchange = () => { nuovo.hidden = sel.value !== 'nuovo'; const m = scelto(); umLbl.textContent = m?.um ? ` (${m.um})` : ''; };
+  // Un avanzo si riferisce solo a materiali del preventivo
+  tipo.querySelector('input').addEventListener('change', (e) => {
+    const av = e.target.value.startsWith('Avanzo');
+    opzNuovo.hidden = av; opzNuovo.disabled = av; if (gruppoCat) { gruppoCat.hidden = av; gruppoCat.disabled = av; }
+    if (av && (sel.value === 'nuovo' || sel.value.startsWith('cat:'))) { sel.value = ''; sel.onchange(); }
+  });
   const foto = sceltaFoto({ etichetta: '📷 Foto della bolla o dello scontrino (facoltativa)' });
   modulo(main, c, 'Materiale', [
     tipo, campo('Materiale', sel), nuovo,
@@ -192,10 +204,12 @@ export async function paginaMateriale(main, id) {
     const t = form.tipo.value.startsWith('Avanzo') ? 'avanzo' : 'aggiunta';
     deveEssere(sel.value, 'Scegli il materiale'); deveEssere(q > 0, 'Inserisci la quantità');
     const m = mats.find((x) => x.id === Number(sel.value));
-    const nome = m ? m.materiale : form.nuovo_materiale.value.trim();
+    const cat = sel.value.startsWith('cat:') ? dalCatalogo.find((x) => x.id === Number(sel.value.slice(4))) : null;
+    const nome = m ? m.materiale : cat ? cat.nome : form.nuovo_materiale.value.trim();
     deveEssere(nome, 'Scrivi il nome del materiale');
     await accoda({ tipo: 'movimenti', cantiere_id: c.id, descrizione: `${t === 'avanzo' ? 'Avanzo' : 'Mancante'}: ${nome} ${n(q)}`, foto: foto.foto,
-      campi: { id: nuovoId(), cantiere_id: c.id, tipo: t, materiale_id: m ? m.id : null, nuovo_materiale: m ? null : nome, um: m ? null : (form.um.value || null),
+      campi: { id: nuovoId(), cantiere_id: c.id, tipo: t, materiale_id: m ? m.id : null, catalogo_id: cat ? cat.id : null,
+        nuovo_materiale: m || cat ? null : nome, um: m || cat ? null : (form.um.value || null),
         quantita: q, data: form.data.value, note: form.note.value || null } });
   });
 }

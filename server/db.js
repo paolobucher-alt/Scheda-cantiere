@@ -116,6 +116,16 @@ CREATE TABLE IF NOT EXISTS materiali (
   prezzo REAL,
   q_prevista REAL NOT NULL DEFAULT 0
 );
+-- Catalogo generale dei materiali: il prezzo viene copiato nel cantiere quando si usa,
+-- così un aggiornamento del catalogo non cambia i cantieri già registrati
+CREATE TABLE IF NOT EXISTS catalogo_materiali (
+  id INTEGER PRIMARY KEY,
+  nome TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  um TEXT,
+  prezzo REAL,
+  categoria TEXT,
+  attivo INTEGER NOT NULL DEFAULT 1
+);
 -- Mancanti aggiunti e avanzi resi, registrati dal cantiere
 CREATE TABLE IF NOT EXISTS movimenti_materiale (
   id TEXT PRIMARY KEY,
@@ -166,6 +176,9 @@ export function apriDb(dataDir) {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
   db.exec(SCHEMA);
+  // Aggiornamenti dello schema per i database già esistenti
+  const colonne = db.prepare('PRAGMA table_info(materiali)').all().map((c) => c.name);
+  if (!colonne.includes('catalogo_id')) db.exec('ALTER TABLE materiali ADD COLUMN catalogo_id INTEGER REFERENCES catalogo_materiali(id) ON DELETE SET NULL');
   const ins = db.prepare('INSERT OR IGNORE INTO limiti_spesa (tipo, limite) VALUES (?, ?)');
   for (const [t, l] of Object.entries(LIMITI_INIZIALI)) ins.run(t, l);
   return db;

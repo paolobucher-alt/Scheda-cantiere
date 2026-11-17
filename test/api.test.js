@@ -140,3 +140,47 @@ test('diario e export CSV', async () => {
   const ore = await uff('GET', '/api/export/ore.csv?dal=2026-11-01&al=2026-11-30');
   assert.equal(ore.body.trim().split('\r\n').length, 4); // intestazione + 3 righe di novembre su C001
 });
+
+test('catalogo materiali: prezzo copiato nel cantiere, il caposquadra non vede i prezzi', async () => {
+  const uff = await login('ufficio@demo.it', 'ufficio123');
+  const capo = await login('rossi@demo.it', 'cantiere123');
+  const cat = await uff('POST', '/api/catalogo', { nome: 'Malta bastarda 25 kg', um: 'sacco', prezzo: 5.2, categoria: 'Edile' });
+  assert.equal(cat.status, 200);
+  assert.equal((await uff('POST', '/api/catalogo', { nome: 'malta bastarda 25 KG', um: 'sacco', prezzo: 5 })).status, 409, 'nome doppio rifiutato');
+  // dal catalogo al preventivo: si compilano nome, U.M. e prezzo
+  const m = await uff('POST', `/api/cantieri/${demo.c1}/materiali`, { catalogo_id: cat.body.id, q_prevista: 10 });
+  assert.equal(m.status, 200);
+  let mat = (await uff('GET', `/api/cantieri/${demo.c1}/scheda`)).body.materiali.find((x) => x.id === m.body.id);
+  assert.equal(mat.materiale, 'Malta bastarda 25 kg'); assert.equal(mat.prezzo, 5.2); assert.equal(mat.costo_previsto, 52);
+  // un aumento nel catalogo non cambia il cantiere
+  await uff('PUT', `/api/catalogo/${cat.body.id}`, { nome: 'Malta bastarda 25 kg', um: 'sacco', prezzo: 6, categoria: 'Edile' });
+  mat = (await uff('GET', `/api/cantieri/${demo.c1}/scheda`)).body.materiali.find((x) => x.id === m.body.id);
+  assert.equal(mat.prezzo, 5.2);
+  // "aggiungi anche al catalogo"
+  await uff('POST', `/api/cantieri/${demo.c1}/materiali`, { materiale: 'Guaina liquida', um: 'secchio', prezzo: 48, q_prevista: 2, salva_catalogo: true });
+  const lista = (await uff('GET', '/api/catalogo')).body;
+  assert.ok(lista.some((c) => c.nome === 'Guaina liquida' && c.prezzo === 48 && c.usato === 1));
+  // il caposquadra vede il catalogo senza prezzi e non può aprirlo come ufficio
+  const d = (await capo('GET', '/api/dati-base')).body;
+  assert.ok(d.catalogo.some((c) => c.nome === 'Malta bastarda 25 kg'));
+  assert.ok(!/prezzo/.test(JSON.stringify(d.catalogo)));
+  assert.equal((await capo('GET', '/api/catalogo')).status, 403);
+  // mancante dal catalogo: prende il prezzo attuale del catalogo, senza "prezzo mancante"
+  const cat2 = await uff('POST', '/api/catalogo', { nome: 'Rete elettrosaldata', um: 'pannello', prezzo: 18 });
+  const f = new FormData();
+  Object.entries({ id: crypto.randomUUID(), cantiere_id: demo.c1, tipo: 'aggiunta', catalogo_id: cat2.body.id, quantita: '5', data: '2026-11-12' }).forEach(([k, v]) => f.append(k, v));
+  assert.equal((await capo('POST', '/api/movimenti', f, true)).status, 200);
+  const rete = (await uff('GET', `/api/cantieri/${demo.c1}/scheda`)).body.materiali.find((x) => x.materiale === 'Rete elettrosaldata');
+  assert.equal(rete.prezzo, 18); assert.equal(rete.q_aggiunta, 5); assert.equal(rete.costo_reale, 90);
+});
+
+test('aggiornamento di un database esistente senza la colonna catalogo_id', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const fs = await import('node:fs'); const os = await import('node:os'); const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-mig-'));
+  const vecchio = new DatabaseSync(path.join(dir, 'scheda-cantiere.sqlite'));
+  vecchio.exec(`CREATE TABLE materiali (id INTEGER PRIMARY KEY, cantiere_id INTEGER NOT NULL, materiale TEXT NOT NULL, um TEXT, prezzo REAL, q_prevista REAL NOT NULL DEFAULT 0)`);
+  vecchio.close();
+  const db2 = apriDb(dir);
+  assert.ok(db2.prepare('PRAGMA table_info(materiali)').all().some((c) => c.name === 'catalogo_id'));
+});

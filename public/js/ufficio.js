@@ -99,16 +99,16 @@ export async function scheda(main, id) {
   // Materiali (preventivo modificabile)
   const senzaPrezzo = s.materiali.filter((m) => m.prezzo === null).length;
   main.append(h('h2', null, 'Materiali'),
-    senzaPrezzo ? h('div', { class: 'card', style: 'background:var(--giallo)' }, senzaPrezzo === 1 ? 'Un materiale aggiunto dal cantiere non ha ancora un prezzo: inseriscilo per averlo nel bilancio.' : `${senzaPrezzo} materiali aggiunti dal cantiere non hanno ancora un prezzo: inseriscilo per averli nel bilancio.`) : null,
+    ...(senzaPrezzo ? [h('div', { class: 'card', style: 'background:var(--giallo)' }, senzaPrezzo === 1 ? 'Un materiale aggiunto dal cantiere non ha ancora un prezzo: inseriscilo per averlo nel bilancio.' : `${senzaPrezzo} materiali aggiunti dal cantiere non hanno ancora un prezzo: inseriscilo per averli nel bilancio.`) ] : []),
     h('div', { class: 'scorri' }, h('table', { class: 'tabella' },
       h('thead', null, h('tr', null, h('th', null, 'Materiale'), h('th', null, 'U.M.'), ['Prezzo', 'Prevista', 'Aggiunta', 'Avanzata', 'Usata', 'Costo previsto', 'Costo reale', 'Scostamento'].map((x) => h('th', { class: 'n' }, x)), h('th', { class: 'no-stampa' }, ''))),
       h('tbody', null, s.materiali.map((m) => h('tr', null, td(m.materiale), td(m.um || ''), h('td', { class: 'n' }, m.prezzo === null ? h('span', { class: 'pill attesa' }, 'manca') : eur(m.prezzo)),
         h('td', { class: 'n' }, n(m.q_prevista)), h('td', { class: 'n' }, n(m.q_aggiunta)), h('td', { class: 'n' }, n(m.q_avanzata)), h('td', { class: 'n' }, n(m.q_usata)),
         tdE(m.costo_previsto), tdE(m.costo_reale), h('td', { class: 'n ' + (m.scostamento > 0 ? 'neg' : m.scostamento < 0 ? 'pos' : '') }, eur(m.scostamento)),
-        h('td', { class: 'no-stampa', style: 'white-space:nowrap' }, h('button', { class: 'piccolo', onclick: () => materiale(c.id, m, ricarica) }, 'Modifica'), ' ',
+        h('td', { class: 'no-stampa', style: 'white-space:nowrap' }, h('button', { class: 'piccolo', onclick: conErrore(() => materiale(c.id, m, ricarica)) }, 'Modifica'), ' ',
           h('button', { class: 'piccolo pericolo', onclick: conErrore(async () => { if (confirm(`Eliminare ${m.materiale} e i suoi movimenti?`)) { await del(`/api/materiali/${m.id}`); ricarica(); } }) }, '×')))),
       s.materiali.length ? null : h('tr', null, h('td', { colspan: 11, class: 'det' }, 'Nessun materiale a preventivo.'))))),
-    h('button', { class: 'no-stampa', style: 'margin-top:.5rem', onclick: () => materiale(c.id, {}, ricarica) }, '+ Materiale a preventivo'));
+    h('button', { class: 'no-stampa', style: 'margin-top:.5rem', onclick: conErrore(() => materiale(c.id, {}, ricarica)) }, '+ Materiale a preventivo'));
 
   // SAL
   main.append(h('h2', null, 'SAL emessi'),
@@ -151,17 +151,82 @@ function assegna(c, assegnati, utenti, dopo) {
   { onConferma: async (f) => { await put(`/api/cantieri/${c.id}/assegnazioni`, { utenti: new FormData(f).getAll('u').map(Number) }); avviso('Assegnazioni salvate'); dopo(); } });
 }
 
-function materiale(cid, m, dopo) {
+// Normalizza un nome per trovare i doppioni ("Cemento 25kg" ~ "cemento 25 kg")
+const norm = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+const simili = (nome, lista, escludiId) => { const n = norm(nome); if (n.length < 3) return [];
+  return lista.filter((c) => c.id !== escludiId && (norm(c.nome) === n || norm(c.nome).includes(n) || n.includes(norm(c.nome)))); };
+
+async function materiale(cid, m, dopo) {
+  const catalogo = m.id ? [] : (await get('/api/catalogo')).filter((c) => c.attivo);
+  const nome = h('input', { name: 'materiale', value: m.materiale || '', required: true, list: 'lista-catalogo', autocomplete: 'off',
+    placeholder: catalogo.length ? 'Scrivi per cercare nel catalogo' : '' });
+  const um = h('input', { name: 'um', value: m.um || '' });
+  const prezzo = h('input', { name: 'prezzo', inputmode: 'decimal', value: m.prezzo ?? '' });
+  const catId = h('input', { type: 'hidden', name: 'catalogo_id', value: '' });
+  const info = h('div', { class: 'det', style: 'margin-top:.3rem' });
+  const salva = h('label', { style: 'display:flex;gap:.5rem;align-items:center;font-weight:400', hidden: !!m.id },
+    h('input', { type: 'checkbox', name: 'salva_catalogo', style: 'width:1.2rem' }), 'Aggiungi anche al catalogo');
+  nome.addEventListener('input', () => {
+    const c = catalogo.find((x) => x.nome.toLowerCase() === nome.value.trim().toLowerCase());
+    if (c) {
+      catId.value = c.id; um.value = c.um || ''; prezzo.value = c.prezzo === null ? '' : String(c.prezzo).replace('.', ',');
+      info.textContent = 'Dal catalogo: il prezzo viene copiato nel cantiere e puoi cambiarlo qui solo per questo cantiere.'; salva.hidden = true;
+    } else {
+      catId.value = ''; salva.hidden = !!m.id;
+      const sim = simili(nome.value, catalogo);
+      info.textContent = sim.length ? 'Nel catalogo c\'è già: ' + sim.slice(0, 3).map((x) => x.nome).join(', ') : '';
+    }
+  });
   dialogo(m.id ? 'Modifica materiale' : 'Materiale a preventivo', [
-    campo('Materiale', h('input', { name: 'materiale', value: m.materiale || '', required: true })),
-    h('div', { class: 'form-riga' }, h('div', null, campo('U.M.', h('input', { name: 'um', value: m.um || '' }))),
-      h('div', null, campo('Prezzo unitario (€)', h('input', { name: 'prezzo', inputmode: 'decimal', value: m.prezzo ?? '' }))),
+    h('datalist', { id: 'lista-catalogo' }, catalogo.map((c) => h('option', { value: c.nome }, [c.um, c.prezzo !== null ? eur(c.prezzo) : null].filter(Boolean).join(' · ')))),
+    campo('Materiale', nome), info, catId,
+    h('div', { class: 'form-riga' }, h('div', null, campo('U.M.', um)), h('div', null, campo('Prezzo unitario (€)', prezzo)),
       h('div', null, campo('Quantità prevista', h('input', { name: 'q_prevista', inputmode: 'decimal', value: m.q_prevista ?? '' })))),
+    salva,
   ], { onConferma: async (f) => {
     const v = valori(f); v.prezzo = v.prezzo === '' ? null : numero(v.prezzo); v.q_prevista = numero(v.q_prevista || 0);
+    v.catalogo_id = v.catalogo_id ? Number(v.catalogo_id) : null; v.salva_catalogo = !!v.salva_catalogo;
     if (m.id) await put(`/api/materiali/${m.id}`, v); else await post(`/api/cantieri/${cid}/materiali`, v);
     dopo();
   } });
+}
+
+// ---------- Catalogo materiali ----------
+export async function catalogo(main) {
+  const lista = await get('/api/catalogo');
+  const ricarica = () => window.dispatchEvent(new Event('hashchange'));
+  const cerca = h('input', { type: 'search', placeholder: 'Cerca materiale o categoria', style: 'min-width:240px' });
+  const corpo = h('tbody');
+  const form = (c = {}) => {
+    const nome = h('input', { name: 'nome', value: c.nome || '', required: true });
+    const avviso = h('div', { class: 'det', style: 'margin-top:.3rem;color:var(--arancio)' });
+    nome.addEventListener('input', () => { const sim = simili(nome.value, lista, c.id); avviso.textContent = sim.length ? 'Attenzione, simile a: ' + sim.slice(0, 3).map((x) => x.nome).join(', ') : ''; });
+    return [campo('Nome', nome), avviso,
+      h('div', { class: 'form-riga' }, h('div', null, campo('U.M.', h('input', { name: 'um', value: c.um || '', placeholder: 'es. sacco, m, m²' }))),
+        h('div', null, campo('Prezzo unitario (€)', h('input', { name: 'prezzo', inputmode: 'decimal', value: c.prezzo === null || c.prezzo === undefined ? '' : String(c.prezzo).replace('.', ',') })))),
+      campo('Categoria', h('input', { name: 'categoria', value: c.categoria || '', placeholder: 'es. Edile, Idraulica, Elettrico', list: 'categorie' })),
+      h('datalist', { id: 'categorie' }, [...new Set(lista.map((x) => x.categoria).filter(Boolean))].map((x) => h('option', { value: x }))),
+      c.id ? h('label', { style: 'display:flex;gap:.5rem;align-items:center;font-weight:400' }, h('input', { type: 'checkbox', name: 'attivo', checked: !!c.attivo, style: 'width:1.2rem' }), 'Attivo (compare quando si sceglie)') : null];
+  };
+  const leggi = (f) => { const v = valori(f); v.prezzo = v.prezzo === '' ? null : numero(v.prezzo); v.attivo = f.attivo ? !!v.attivo : true; return v; };
+  const disegna = () => {
+    const t = norm(cerca.value);
+    const righe = lista.filter((c) => !t || norm(c.nome + c.categoria).includes(t));
+    corpo.replaceChildren(...righe.map((c) => h('tr', { style: c.attivo ? '' : 'opacity:.55' }, td(c.nome), td(c.categoria || ''), td(c.um || ''),
+      h('td', { class: 'n' }, c.prezzo === null ? h('span', { class: 'pill attesa' }, 'manca') : eur(c.prezzo)),
+      h('td', { class: 'n' }, c.usato || ''),
+      td(h('button', { class: 'piccolo', onclick: () => dialogo('Modifica materiale del catalogo', form(c), { onConferma: async (f) => { await put(`/api/catalogo/${c.id}`, leggi(f)); ricarica(); } }) }, 'Modifica')))),
+      righe.length ? [] : [h('tr', null, h('td', { colspan: 6, class: 'det' }, lista.length ? 'Nessun materiale trovato.' : 'Il catalogo è vuoto: aggiungi i materiali che usi più spesso.'))]);
+  };
+  cerca.oninput = disegna;
+  main.append(h('div', { class: 'intestazione' }, h('h1', null, 'Catalogo materiali'),
+    h('button', { class: 'primario', onclick: () => dialogo('Nuovo materiale del catalogo', form(), { onConferma: async (f) => { await post('/api/catalogo', leggi(f)); ricarica(); } }) }, '+ Aggiungi')),
+    h('p', { class: 'det' }, 'Quando aggiungi un materiale al preventivo di un cantiere, il prezzo del catalogo viene copiato: se poi lo cambi qui, i cantieri già inseriti non cambiano.'),
+    h('div', { class: 'filtri' }, cerca),
+    h('div', { class: 'scorri' }, h('table', { class: 'tabella' },
+      h('thead', null, h('tr', null, h('th', null, 'Materiale'), h('th', null, 'Categoria'), h('th', null, 'U.M.'), h('th', { class: 'n' }, 'Prezzo'), h('th', { class: 'n' }, 'Usato in cantieri'), h('th', null, ''))),
+      corpo)));
+  disegna();
 }
 
 function nuovoSal(cid, numeroSal, dopo) {
