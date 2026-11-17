@@ -20,7 +20,7 @@ function login() {
     try { utente = await post('/api/login', { email: f.email.value, password: f.password.value }); await cacheSalva('utente', utente); location.hash = '#/'; mostra(); }
     catch (er) { err.textContent = er.status === 0 ? 'Serve la connessione per il primo accesso' : er.message; }
   } },
-    h('img', { class: 'logo', src: '/icona.svg', alt: '' }), h('h1', null, 'Scheda Cantiere'),
+    h('img', { class: 'logo', src: '/logo.svg', alt: 'Giochinfiniti' }), h('h1', null, 'Scheda Cantiere'),
     h('label', null, 'Email'), h('input', { name: 'email', type: 'email', autocomplete: 'username', required: true }),
     h('label', null, 'Password'), h('input', { name: 'password', type: 'password', autocomplete: 'current-password', required: true }),
     err, h('button', { class: 'primario grande', type: 'submit' }, 'Entra'));

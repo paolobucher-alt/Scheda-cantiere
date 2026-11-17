@@ -77,7 +77,8 @@ export async function scheda(main, id) {
         h('button', { onclick: () => modificaCantiere(c, ricarica) }, 'Modifica'),
         h('button', { onclick: () => assegna(c, s.assegnati, utenti, ricarica) }, 'Capisquadra'),
         h('a', { class: 'bottone', href: `#/c/${c.id}` }, 'Inserisci dati'),
-        h('button', { class: 'primario', onclick: () => print() }, 'Stampa PDF'))),
+        h('button', { onclick: () => print() }, 'Stampa'),
+        h('button', { class: 'primario', onclick: () => archivia(c) }, 'Archivia'))),
     h('div', { class: 'griglia', style: 'margin-top:1rem' },
       h('div', { class: 'kpi' }, h('div', { class: 'et' }, 'Offerta confermata'), h('div', { class: 'v' }, eur(b.ricavi.offerta))),
       h('div', { class: 'kpi' }, h('div', { class: 'et' }, 'Costo totale'), h('div', { class: 'v' }, eur(b.costi.totale))),
@@ -140,6 +141,18 @@ export async function scheda(main, id) {
   main.append(h('h2', null, 'Diario'), ...(s.diario.length ? s.diario.map((d) => h('div', { class: 'diario-voce ' + d.tipo },
     h('div', { class: 'det' }, dataIt(d.data), ' · ', d.tipo, d.giorni_ritardo ? ` · ${d.giorni_ritardo} gg di ritardo` : '', d.autore ? ' · ' + d.autore : ''),
     h('div', null, d.testo), d.azione ? h('div', { class: 'det' }, 'Azione: ', d.azione) : null, fotoMini(d.foto))) : [h('p', { class: 'det' }, 'Nessuna nota.')]));
+}
+
+// Archivio: scheda in PDF/A (conservazione a lungo termine) e tutti i dati in Excel
+function archivia(c) {
+  const link = (formato, testo, det) => h('a', { class: 'bottone', href: `/api/cantieri/${c.id}/archivio.${formato}`, download: '',
+    style: 'display:block;margin-top:.6rem;text-align:left' }, testo, h('div', { class: 'det', style: 'font-weight:400' }, det));
+  dialogo('Archivia il cantiere', [
+    c.stato === 'Concluso' ? null : h('div', { class: 'card', style: 'background:var(--giallo)' }, `Il cantiere è ancora "${c.stato}": l'archivio riporterà la situazione di oggi.`),
+    h('p', { class: 'det' }, 'Scarica i due file e salvali nella cartella del cantiere. Conviene tenerli entrambi.'),
+    link('pdf', '📄 Scheda in PDF/A', 'Formato per la conservazione a lungo termine: bilancio, materiali, SAL, spese, diario con le foto.'),
+    link('xlsx', '📊 Dati in Excel', 'Tutti i dati riga per riga: ore, km, trasferte, materiali e movimenti, SAL, diario.'),
+  ], { conferma: 'Chiudi', annulla: false });
 }
 
 function assegna(c, assegnati, utenti, dopo) {

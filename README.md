@@ -3,7 +3,7 @@
 App web per gestire costi e ricavi di ogni cantiere: ore lavorate, km dei mezzi, scontrini di trasferta, materiali (previsti, mancanti, avanzi), SAL e diario con foto.
 
 - **Capisquadra**: dal telefono inseriscono ore della squadra, km, scontrini con foto, materiali e note di diario. Funziona anche **senza campo**: i dati restano sul telefono e partono appena torna la connessione. Non vedono tariffe, costi e margini.
-- **Ufficio**: catalogo materiali con prezzi (da cui scegliere nel preventivo: il prezzo viene copiato nel cantiere), cruscotto di tutti i cantieri, scheda cantiere stampabile in PDF, approvazione degli scontrini sopra il limite, anagrafiche con tariffe storicizzate, utenti, limiti di spesa, esportazione CSV per il commercialista.
+- **Ufficio**: catalogo materiali con prezzi (da cui scegliere nel preventivo: il prezzo viene copiato nel cantiere), cruscotto di tutti i cantieri, scheda cantiere stampabile in PDF, archivio del cantiere (pulsante **Archivia**: scheda in PDF/A-2b per la conservazione a lungo termine, con diario e foto, più un file Excel con tutti i dati riga per riga), approvazione degli scontrini sopra il limite, anagrafiche con tariffe storicizzate, utenti, limiti di spesa, esportazione CSV per il commercialista.
 
 I calcoli sono gli stessi del foglio Excel di prova (`Scheda_cantiere_v2.xlsx`); i test automatici verificano che i totali dei cantieri di esempio coincidano.
 
@@ -53,7 +53,8 @@ Accessi di prova: `ufficio@demo.it` / `ufficio123` (ufficio), `rossi@demo.it` / 
 ## Struttura
 
 - `server/` – server Node.js (Express) con database SQLite integrato in Node
-  - `db.js` schema, `calcoli.js` bilancio, `app.js` API e permessi
+  - `db.js` schema, `calcoli.js` bilancio, `app.js` API e permessi, `archivio.js` PDF/A ed Excel di archivio
+  - `fonts/` caratteri DejaVu Sans incorporati nel PDF/A (licenza in `LICENZA-DejaVu.txt`)
 - `public/` – app web senza passaggi di compilazione
   - `js/campo.js` schermate del caposquadra, `js/ufficio.js` schermate dell'ufficio, `js/coda.js` funzionamento offline, `sw.js` service worker
 - `test/` – test automatici (`npm test`)

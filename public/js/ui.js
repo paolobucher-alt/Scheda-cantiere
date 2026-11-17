@@ -37,11 +37,11 @@ export function mostraFoto(src) {
   document.body.append(d); d.showModal();
 }
 
-export function dialogo(titolo, contenuto, { conferma = 'Salva', onConferma } = {}) {
+export function dialogo(titolo, contenuto, { conferma = 'Salva', onConferma, annulla = true } = {}) {
   const errore = h('div', { class: 'errore-campo' });
   const form = h('form', { method: 'dialog' }, h('h2', { style: 'margin-top:0' }, titolo), contenuto, errore,
     h('div', { style: 'display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem' },
-      h('button', { type: 'button', onclick: () => d.close() }, 'Annulla'),
+      annulla ? h('button', { type: 'button', onclick: () => d.close() }, 'Annulla') : null,
       h('button', { class: 'primario', type: 'submit' }, conferma)));
   const d = h('dialog', { onclose: () => d.remove() }, form);
   form.addEventListener('submit', async (e) => {

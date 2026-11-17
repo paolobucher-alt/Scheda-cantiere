@@ -184,3 +184,30 @@ test('aggiornamento di un database esistente senza la colonna catalogo_id', asyn
   const db2 = apriDb(dir);
   assert.ok(db2.prepare('PRAGMA table_info(materiali)').all().some((c) => c.name === 'catalogo_id'));
 });
+
+test('archivio del cantiere: PDF/A e Excel solo per l\'ufficio', async () => {
+  const capo = await login('rossi@demo.it', 'cantiere123');
+  assert.equal((await capo('GET', `/api/cantieri/${demo.c1}/archivio.pdf`)).status, 403);
+  const uff = await login('ufficio@demo.it', 'ufficio123');
+  const cookie = (await fetch(base + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'ufficio@demo.it', password: 'ufficio123' }) }))
+    .headers.get('set-cookie').split(';')[0];
+  const pdf = await fetch(`${base}/api/cantieri/${demo.c1}/archivio.pdf`, { headers: { cookie } });
+  assert.equal(pdf.status, 200);
+  assert.match(pdf.headers.get('content-disposition'), /Archivio_C001_Ristrutturazione-Villa-Neri_\d{4}-\d{2}-\d{2}\.pdf/);
+  const testo = Buffer.from(await pdf.arrayBuffer()).toString('latin1');
+  assert.ok(testo.startsWith('%PDF-1.7'));
+  assert.match(testo, /<pdfaid:part>2<\/pdfaid:part>/);
+  assert.match(testo, /<pdfaid:conformance>B<\/pdfaid:conformance>/);
+  const xl = await fetch(`${base}/api/cantieri/${demo.c1}/archivio.xlsx`, { headers: { cookie } });
+  assert.equal(xl.status, 200);
+  const buf = Buffer.from(await xl.arrayBuffer());
+  assert.equal(buf.subarray(0, 2).toString(), 'PK');
+  const ExcelJS = (await import('exceljs')).default;
+  const wb = new ExcelJS.Workbook(); await wb.xlsx.load(buf);
+  assert.deepEqual(wb.worksheets.map((w) => w.name), ['Riepilogo', 'SAL', 'Ore', 'Km', 'Trasferte', 'Materiali', 'Movimenti materiali', 'Diario']);
+  const riep = Object.fromEntries(wb.getWorksheet('Riepilogo').getSheetValues().filter(Boolean).map((r) => [r[1], r[2]]));
+  const b = (await uff('GET', '/api/riepilogo')).body.find((c) => c.id === demo.c1).bilancio;
+  assert.equal(riep['Costo totale'], b.costi.totale);
+  assert.equal(riep['Margine'], b.margine);
+  assert.equal((await uff('GET', '/api/cantieri/9999/archivio.pdf')).status, 404);
+});
