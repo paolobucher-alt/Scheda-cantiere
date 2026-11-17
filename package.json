@@ -1,0 +1,20 @@
+{
+  "name": "scheda-cantiere",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Gestione costi e ricavi per cantiere: ore, km, trasferte, materiali, SAL e diario con foto.",
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node --no-warnings=ExperimentalWarning server/index.js",
+    "dev": "node --no-warnings=ExperimentalWarning --watch server/index.js",
+    "crea-admin": "node --no-warnings=ExperimentalWarning server/crea-admin.js",
+    "demo": "node --no-warnings=ExperimentalWarning server/demo.js",
+    "test": "node --no-warnings=ExperimentalWarning --test test/*.test.js"
+  },
+  "dependencies": {
+    "bcryptjs": "2.4.3",
+    "express": "4.21.2",
+    "multer": "2.0.2"
+  }
+}

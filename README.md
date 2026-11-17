@@ -34,6 +34,10 @@ Accessi di prova: `ufficio@demo.it` / `ufficio123` (ufficio), `rossi@demo.it` / 
 
 ## Metterla in uso
 
+**Con Render (consigliato)**: dal pannello di Render scegli *New → Blueprint*, collega questo repository e conferma: il file `render.yaml` crea il servizio a Francoforte con un disco da 1 GB su `/data`. Render chiede `ADMIN_EMAIL`, `ADMIN_NOME` e `ADMIN_PASSWORD` (almeno 8 caratteri): al primo avvio, con il database vuoto, l'app crea con questi dati il primo utente dell'ufficio.
+
+**Altrove**:
+
 1. Pubblica l'app su un servizio che esegue container Docker con un **disco persistente** montato su `/data` (database e foto stanno lì). Va bene un piccolo server in UE: per circa 20 utenti bastano 512 MB di RAM.
 2. Serve **HTTPS** (quasi tutti i servizi lo danno già): senza HTTPS il telefono non installa l'app e non la fa funzionare offline.
 3. Crea il primo utente dell'ufficio:
