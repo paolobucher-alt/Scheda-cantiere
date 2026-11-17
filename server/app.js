@@ -6,6 +6,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { tx } from './db.js';
+import { datiArchivio, pdfArchivio, excelArchivio, nomeFile } from './archivio.js';
 import { bilancioCantiere, materialiCantiere, SQL_TARIFFA_ORE, SQL_COSTO_KM, SPESE_VALIDE } from './calcoli.js';
 
 const PUBLIC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -325,6 +326,20 @@ export function creaApp(db, { dataDir, cookieSecure = false } = {}) {
         .all(c.id).map((s) => ({ ...s, foto: fotoDi('spesa', s.id) })),
     };
   }));
+
+  // Archivio del cantiere: scheda PDF/A e cartella Excel con tutti i dati
+  u.get('/cantieri/:id/archivio.:formato(pdf|xlsx)', async (req, res, next) => {
+    try {
+      const d = datiArchivio(db, Number(req.params.id));
+      if (!d) throw err(404, 'Cantiere non trovato');
+      const pdf = req.params.formato === 'pdf';
+      const buf = pdf ? await pdfArchivio(d, fotoDir) : await excelArchivio(d);
+      res.setHeader('Content-Type', pdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="Archivio_${nomeFile(d.cantiere)}_${d.generato}.${req.params.formato}"`);
+      res.setHeader('Cache-Control', 'no-store');
+      res.send(buf);
+    } catch (e) { next(e); }
+  });
 
   const campiCantiere = (b) => ({
     codice: txt(b.codice, 'codice', { max: 30 }), nome: txt(b.nome, 'nome', { max: 200 }),
