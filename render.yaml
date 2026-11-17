@@ -1,0 +1,17 @@
+# Configurazione per Render (https://render.com): crea il servizio con un clic da "New > Blueprint".
+services:
+  - type: web
+    name: scheda-cantiere
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    healthCheckPath: /index.html
+    envVars:
+      - key: DATA_DIR
+        value: /data
+      - key: COOKIE_SECURE
+        value: "1"
+    disk:
+      name: dati
+      mountPath: /data
+      sizeGB: 1
